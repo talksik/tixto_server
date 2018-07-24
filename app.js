@@ -10,7 +10,7 @@ var con = mysql.createConnection({
   database: 'nexto'
 });
 
-var port = 3000;
+var port = process.env.PORT || 3000;
 server.listen(port, () => console.log('serving on port: ' + port));
 
 app.get('/', function (req, res) {
