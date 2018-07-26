@@ -4,10 +4,10 @@ var io = require('socket.io')(server);
 var mysql = require('mysql');
 
 var con = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'mysql',
-  database: 'nexto'
+  host: 'us-cdbr-iron-east-04.cleardb.net',
+  user: 'bc7fa7fdf1822b',
+  password: 'f62b55b3',
+  database: 'heroku_99e764eb3c2ab7e'
 });
 
 var port = process.env.PORT || 3000;
