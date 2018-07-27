@@ -3,12 +3,14 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var mysql = require('mysql');
 
-var con = mysql.createConnection({
+var db_config = {
   host: 'us-cdbr-iron-east-04.cleardb.net',
   user: 'bc7fa7fdf1822b',
   password: 'f62b55b3',
   database: 'heroku_99e764eb3c2ab7e'
-});
+};
+
+var con;
 
 var port = process.env.PORT || 3000;
 server.listen(port, () => console.log('serving on port: ' + port));
@@ -16,6 +18,29 @@ server.listen(port, () => console.log('serving on port: ' + port));
 app.get('/', function (req, res) {
   res.sendFile(__dirname + '/index.html');
 });
+
+
+function handleDisconnect() {
+  con = mysql.createConnection(db_config); // Recreate the connection, since
+                                                  // the old one cannot be reused.
+
+  con.connect(function(err) {              // The server is either down
+    if(err) {                                     // or restarting (takes a while sometimes).
+      console.log('error when connecting to db:', err);
+      setTimeout(handleDisconnect, 2000); // We introduce a delay before attempting to reconnect,
+    }                                     // to avoid a hot loop, and to allow our node script to
+  });                                     // process asynchronous requests in the meantime.
+                                          // If you're also serving http, display a 503 error.
+  con.on('error', function(err) {
+    console.log('db error', err);
+    if(err.code === 'PROTOCOL_CONNECTION_LOST') { // Connection to the MySQL server is usually
+      handleDisconnect();                         // lost due to either server restart, or a
+    } else {                                      // connnection idle timeout (the wait_timeout
+      throw err;                                  // server variable configures this)
+    }
+  });
+}
+
 
 io.on('connection', function (socket) {
   console.log('Client connected: ' + socket.id);
@@ -60,5 +85,14 @@ io.on('connection', function (socket) {
 
   socket.on('disconnect', function() {
     console.log('Client disconnected: ' + socket.id);
+  });
+
+  socket.on('error', function(err) {
+    console.log('db error', err);
+    if(err.code === 'PROTOCOL_CONNECTION_LOST') { // Connection to the MySQL server is usually
+      handleDisconnect();                         // lost due to either server restart, or a
+    } else {                                      // connnection idle timeout (the wait_timeout
+      throw err;                                  // server variable configures this)
+    }
   });
 });
