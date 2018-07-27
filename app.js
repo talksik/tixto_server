@@ -40,6 +40,7 @@ function handleDisconnect() {
     }
   });
 }
+handleDisconnect();
 
 
 io.on('connection', function (socket) {
