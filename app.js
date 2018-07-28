@@ -48,7 +48,7 @@ app.get('/userid', function (req, res) {
     currUserId = result + 1;
   });
 
-  res.json(currUserId);
+  res.json({userId : currUserId});
 });
 
 
