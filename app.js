@@ -19,7 +19,6 @@ app.get('/', function (req, res) {
   res.sendFile(__dirname + '/index.html');
 });
 
-
 function handleDisconnect() {
   con = mysql.createConnection(db_config); // Recreate the connection, since
                                                   // the old one cannot be reused.
@@ -41,6 +40,16 @@ function handleDisconnect() {
   });
 }
 handleDisconnect();
+
+app.get('/userid', function (req, res) {
+  var currUserId;
+  con.query('SELECT max(userId) from messages;', function (err, result, fields) {
+    if (err) throw err;
+    currUserId = result + 1;
+  });
+
+  res.json(currUserId);
+});
 
 
 io.on('connection', function (socket) {
