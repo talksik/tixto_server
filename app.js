@@ -42,10 +42,13 @@ function handleDisconnect() {
 handleDisconnect();
 
 app.get('/userid', function (req, res) {
-  var currUserId = 1;
+  var currUserId;
   con.query('SELECT max(userId) from messages;', function (err, result, fields) {
     if (err) throw err;
-    if (result) currUserId = result + 1;
+    if (result)
+      currUserId = result + 1;
+    else
+      currUserId = 1;
   });
 
   res.json({userId : currUserId});
