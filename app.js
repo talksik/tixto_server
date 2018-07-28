@@ -45,7 +45,7 @@ app.get('/userid', function (req, res) {
   con.query('SELECT max(userId) as id from messages;', function (err, result, fields) {
     if (err) throw err;
     if (result) {
-      console.log(result.id);
+      console.log(result);
       res.json({userId: result.id + 1});
     } else {
       res.json({userId: 1});
