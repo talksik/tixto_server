@@ -60,9 +60,9 @@ io.on('connection', function (socket) {
   //io.on('test', () => console.log('worked~')); // test with web page
 
   socket.on('newMessage', function(msg) {
-    var sql = "INSERT INTO messages (userId, text, createdAt, lng, lat) VALUES (?, ?, ?, ?, ?)";
+    var sql = "INSERT INTO messages (userId, text, createdAt, lng, lat, avatar) VALUES (?, ?, ?, ?, ?, ?)";
     var currTime = new Date().toString();
-    con.query(sql, [msg.userId, msg.text, currTime, msg.lng, msg.lat], function(err, result) {
+    con.query(sql, [msg.userId, msg.text, currTime, msg.lng, msg.lat, msg.avatar], function(err, result) {
       if (err) throw err;
       console.log('Message sent to db!');
 
@@ -78,7 +78,8 @@ io.on('connection', function (socket) {
         text: msg.text,
         createdAt: currTime,
         lng: msg.lng,
-        lat: msg.lat
+        lat: msg.lat,
+        avatar: msg.avatar
       };
       io.emit('newMessage', uploadedMsg);
     });
