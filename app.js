@@ -25,7 +25,7 @@ function handleDisconnect() {
 
   con.connect(function(err) {              // The server is either down
     if(err) {                                     // or restarting (takes a while sometimes).
-      console.log('error when connecting to db:', err);
+      console.log('error when connecting to db...settingTimeout then connecting again');
       setTimeout(handleDisconnect, 2000); // We introduce a delay before attempting to reconnect,
     }                                     // to avoid a hot loop, and to allow our node script to
   });                                     // process asynchronous requests in the meantime.
@@ -41,54 +41,58 @@ function handleDisconnect() {
 }
 handleDisconnect();
 
-app.get('/userid', function (req, res) {
-  con.query('SELECT max(userId) as userId from messages;', function (err, result, fields) {
-    if (err) throw err;
-    if (result) {
-      console.log(result[0].userId);
-      res.json({userId: result[0].userId + 1});
-    } else {
-      res.json({userId: 1});
-    }
-  });
-});
-
 
 io.on('connection', function (socket) {
   console.log('Client connected: ' + socket.id);
 
-  socket.on('initial', (position) => {
-    console.log(position.long + ' ' + position.lat);
-    //var sql = 'select * from messages where lng = 0';
-    var sql = 'SELECT * FROM messages HAVING (6371393 * acos(cos(radians((?))) * cos(radians(lat)) * cos(radians(lng) - radians((?))) + sin(radians((?))) * sin(radians(lat))) < 100) ORDER BY id;'
-    con.query(sql, [position.lat, position.long, position.lat], function (err, result, fields) {
+  /*
+  *  Client sends a request with its position and avatar link
+  *  Returns the inital messages and assigned user_id
+  */
+  socket.on('initial', (input) => {
+    console.log('Position: ' + input.position.long + ' ' + input.position.lat);
+    let long = input.position.long;
+    let lat = input.position.lat;
+    let avatar = input.avatar;
+
+    var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 200) ORDER BY messages.id;'
+    con.query(sql, [lat, long, lat], function (err, result, fields) {
       if (err) throw err;
+
+      console.log(result);
       socket.emit('initMessages', result);
       console.log('sent all initial messages');
     });
+
+    var newUserSql = 'INSERT INTO users (avatar) VALUES (?)';
+    con.query(newUserSql, [avatar], function (err, result, fields) {
+      if (err) throw err;
+      if (result) {
+        var user_id = result.insertId;
+        console.log("User id given: " + user_id);
+
+        socket.emit("userId", {userId: user_id});
+      } else {
+        socket.emit("userId", {userId: 1});
+      }
+    });
   });
 
-  //io.on('test', () => console.log('worked~')); // test with web page
-
   socket.on('newMessage', function(msg) {
-    var sql = "INSERT INTO messages (userId, text, createdAt, lng, lat, avatar) VALUES (?, ?, ?, ?, ?, ?)";
+    var sql = "INSERT INTO messages (lat, lng, text, user_id) VALUES (?, ?, ?, ?)";
     var currTime = new Date().toString();
-    con.query(sql, [msg.userId, msg.text, currTime, msg.lng, msg.lat, msg.avatar], function(err, result) {
+    con.query(sql, [msg.lat, msg.long, msg.text, msg.user_id], function(err, result, fields) {
       if (err) throw err;
-      console.log('Message sent to db!');
 
-      var msgId = 0;
-      con.query('SELECT LAST_INSERT_ID()', function(err, result) {
-        if(err) throw err;
-        msgId = result;
-        console.log(msgId);
-      });
+      var msgId = result.insertId;
+      console.log('Message with id ' + msgId + ' inserted!');
+
       var uploadedMsg = {
         id: msgId,
-        userId: msg.userId,
+        user_id: msg.user_id,
         text: msg.text,
-        createdAt: currTime,
-        lng: msg.lng,
+        created: currTime,
+        long: msg.long,
         lat: msg.lat,
         avatar: msg.avatar
       };
