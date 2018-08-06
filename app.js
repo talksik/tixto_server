@@ -55,7 +55,7 @@ io.on('connection', function (socket) {
     let lat = input.position.lat;
     let avatar = input.avatar;
 
-    var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 200) ORDER BY messages.id;'
+    var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 300) ORDER BY messages.id;'
     con.query(sql, [lat, long, lat], function (err, result, fields) {
       if (err) throw err;
 
