@@ -3,6 +3,22 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var mysql = require('mysql');
 
+var Twit = require('twit');
+var config = require('./config/twitter.js');
+var T = new Twit(config);
+
+var params = {
+  q: 'akshay',
+  count: 2
+  } // this is the param variable which will have key and value
+T.get('search/tweets', params,searchedData);
+function searchedData(err, data, response) {
+  if (err) console.log(err);
+  console.log(data);
+} // searchedData function is a callback function which
+
+
+
 var db_config = {
   host: 'us-cdbr-iron-east-04.cleardb.net',
   user: 'bc7fa7fdf1822b',
@@ -21,17 +37,16 @@ app.get('/', function (req, res) {
 
 function handleDisconnect() {
   con = mysql.createConnection(db_config); // Recreate the connection, since
-                                                  // the old one cannot be reused.
+                                           // the old one cannot be reused.
 
   con.connect(function(err) {              // The server is either down
     if(err) {                                     // or restarting (takes a while sometimes).
-      console.log('error when connecting to db...settingTimeout then connecting again');
+      console.log('error when connecting to db', err);
       setTimeout(handleDisconnect, 2000); // We introduce a delay before attempting to reconnect,
     }                                     // to avoid a hot loop, and to allow our node script to
   });                                     // process asynchronous requests in the meantime.
                                           // If you're also serving http, display a 503 error.
   con.on('error', function(err) {
-    console.log('db error', err);
     if(err.code === 'PROTOCOL_CONNECTION_LOST') { // Connection to the MySQL server is usually
       handleDisconnect();                         // lost due to either server restart, or a
     } else {                                      // connnection idle timeout (the wait_timeout
@@ -54,18 +69,19 @@ io.on('connection', function (socket) {
     let long = input.position.long;
     let lat = input.position.lat;
     let avatar = input.avatar;
+    let active = 1;
+    let socket_id = socket.id;
 
-    var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 300) ORDER BY messages.id;'
+    var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 300) ORDER BY messages.id'
     con.query(sql, [lat, long, lat], function (err, result, fields) {
       if (err) throw err;
 
-      console.log(result);
       socket.emit('initMessages', result);
-      console.log('sent all initial messages');
+      console.log('Sent all ' + result.length + ' initial messages!');
     });
 
-    var newUserSql = 'INSERT INTO users (avatar) VALUES (?)';
-    con.query(newUserSql, [avatar], function (err, result, fields) {
+    var newUserSql = 'INSERT INTO users (avatar, lat, lng, active, last_socket_id) VALUES (?, ?, ?, ?, ?)';
+    con.query(newUserSql, [avatar, lat, long, active, socket_id], function (err, result, fields) {
       if (err) throw err;
       if (result) {
         var user_id = result.insertId;
@@ -81,26 +97,50 @@ io.on('connection', function (socket) {
   socket.on('newMessage', function(msg) {
     var sql = "INSERT INTO messages (lat, lng, text, user_id) VALUES (?, ?, ?, ?)";
     var currTime = new Date().toString();
-    con.query(sql, [msg.lat, msg.long, msg.text, msg.user_id], function(err, result, fields) {
+    // check validity of grabbing this info from msg itself rather than users and messages tables
+    let user_id = msg.user_id;
+    let text = msg.text;
+    let lat = msg.lat;
+    let lng = msg.long;
+    let avatar = msg.avatar;
+    let socket_id = socket.id;
+
+    con.query(sql, [lat, lng, text, user_id], function(err, result, fields) {
       if (err) throw err;
 
       var msgId = result.insertId;
-      console.log('Message with id ' + msgId + ' inserted!');
+      console.log('Message with id ' + msgId + ' inserted into DB!');
 
       var uploadedMsg = {
         id: msgId,
-        user_id: msg.user_id,
-        text: msg.text,
+        user_id: user_id,
+        text: text,
         created: currTime,
-        long: msg.long,
-        lat: msg.lat,
-        avatar: msg.avatar
+        long: lng,
+        lat: lat,
+        avatar: avatar
       };
-      io.emit('newMessage', uploadedMsg);
+
+      var findUsersNear = 'SELECT * FROM users WHERE active=(?) HAVING (6371393 * acos(cos(radians((?))) * cos(radians(lat)) * cos(radians(lng) - radians((?))) + sin(radians((?))) * sin(radians(lat))) < 300) ORDER BY id';
+
+      con.query(findUsersNear, [1, lat, lng, lat], function (err, result, fields) {
+        if (err) throw err;
+
+        result.map((user) => {
+          io.to(user.last_socket_id).emit('newMessage', uploadedMsg);
+        });
+
+        console.log('Sent to all active users nearby!');
+      });
     });
   });
 
   socket.on('disconnect', function() {
-    console.log('Client disconnected: ' + socket.id);
+    var disconnectUser = 'UPDATE users SET active = (?) WHERE last_socket_id = (?)';
+
+    con.query(disconnectUser, [0, socket.id], function (err, result, fields) {
+      if (err) throw err;
+      console.log('Client disconnected: ' + socket.id + ' and not active!');
+    });
   });
 });
