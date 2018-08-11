@@ -11,7 +11,7 @@ var params = {
   q: 'akshay',
   count: 2
   } // this is the param variable which will have key and value
-T.get('search/tweets', params,searchedData);
+//T.get('search/tweets', params,searchedData);
 function searchedData(err, data, response) {
   if (err) console.log(err);
   console.log(data);
@@ -68,9 +68,6 @@ io.on('connection', function (socket) {
     console.log('Position: ' + input.position.long + ' ' + input.position.lat);
     let long = input.position.long;
     let lat = input.position.lat;
-    let avatar = input.avatar;
-    let active = 1;
-    let socket_id = socket.id;
 
     var sql = 'SELECT * FROM messages, users WHERE messages.user_id = users.id HAVING (6371393 * acos(cos(radians((?))) * cos(radians(messages.lat)) * cos(radians(messages.lng) - radians((?))) + sin(radians((?))) * sin(radians(messages.lat))) < 300) ORDER BY messages.id'
     con.query(sql, [lat, long, lat], function (err, result, fields) {
@@ -79,20 +76,51 @@ io.on('connection', function (socket) {
       socket.emit('initMessages', result);
       console.log('Sent all ' + result.length + ' initial messages!');
     });
-
-    var newUserSql = 'INSERT INTO users (avatar, lat, lng, active, last_socket_id) VALUES (?, ?, ?, ?, ?)';
-    con.query(newUserSql, [avatar, lat, long, active, socket_id], function (err, result, fields) {
-      if (err) throw err;
-      if (result) {
-        var user_id = result.insertId;
-        console.log("User id given: " + user_id);
-
-        socket.emit("userId", {userId: user_id});
-      } else {
-        socket.emit("userId", {userId: 1});
-      }
-    });
   });
+
+
+  socket.on('userId', (input) => {
+    let user_id = input.user_id;
+    let newUser = input.newUser;
+    let lat = input.position.lat;
+    let lng = input.position.long;
+    let avatar = input.avatar;
+    let active = 1;
+    let socket_id = socket.id;
+
+    if (!newUser) {
+      var updateSocketId = 'UPDATE users SET avatar=(?), lat=(?), lng=(?), active=(?), last_socket_id=(?) WHERE id=(?)';
+
+      con.query(updateSocketId, [avatar, lat, lng, active, socket_id, user_id], function (err, result, fields) {
+        if (err) throw err;
+        console.log('Already user in: ' + user_id);
+      });
+    } else {
+      var newUserSql = 'INSERT INTO users (avatar, lat, lng, active, last_socket_id) VALUES (?, ?, ?, ?, ?)';
+
+      con.query(newUserSql, [avatar, lat, lng, active, socket_id], function (err, result, fields) {
+        if (err) throw err;
+        if (result) {
+          var user_id = result.insertId;
+          console.log("User id given: " + user_id);
+
+          socket.emit("getNewUserId", {user_id: user_id});
+        }
+      });
+    }
+  });
+
+
+  socket.on('newUserId', (input) => {
+    let lat = input.position.lat;
+    let lng = input.position.long;
+    let avatar = input.avatar;
+    let active = 1;
+    let socket_id = socket.id;
+
+
+  });
+
 
   socket.on('newMessage', function(msg) {
     var sql = "INSERT INTO messages (lat, lng, text, user_id) VALUES (?, ?, ?, ?)";
