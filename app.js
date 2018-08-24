@@ -3,6 +3,23 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var mysql = require('mysql');
 
+const webhoseio = require('webhoseio');
+
+const client = webhoseio.config({token: 'cbbf0b09-1a00-4b07-81ef-c2c6233dd481'});
+
+var news;
+
+client.query('filterWebContent', {q: "language:english site_type:news site:cnn.com"}) // grabbing only from cnn
+  .then(output => {
+    console.log(output['totalResults']);
+
+    var posts = output['posts'];
+    console.log(posts.length);
+    // 100
+    news = posts.slice(0, 11); // going to send only 10 to frontend
+});
+
+
 var Twit = require('twit');
 var config = require('./config/twitter.js');
 var T = new Twit(config);
@@ -16,8 +33,6 @@ function searchedData(err, data, response) {
   if (err) console.log(err);
   console.log(data);
 } // searchedData function is a callback function which
-
-
 
 var db_config = {
   host: 'us-cdbr-iron-east-04.cleardb.net',
